@@ -28,8 +28,115 @@ url3 = "https://www.usajobs.gov/Search/Results?jt=Data%20Scientist"
 </div>
 ```
 
-```{r test}
+```{r get_search_length_test}
+html = read_html(url1)
+
+html %>% html_element(".usajobs-search-controls__results-count") %>% html_text2()
+#html %>% html_element(".usajobs-search-noresults-suggestions") %>% html_text2()
+html %>% html_elements("div.page-info")
+#html %>% html_elements(".usajobs-search .usajobs-search-noresults-suggestions")
+
+#".usajobs-search-controls__results-count"
+
+#html %>% 
+#  html_nodes("*") %>% 
+#  html_attr("class") %>% 
+#  unique()
+
+#class="usajobs-search-noresults-suggestions"
+#.usajobs-search-controls__results-count-container no-params usajobs-search-noresults
+```
+
+```{r get_hrefs}
+
+html = read_html(url1)
+
+html %>% 
+  html_elements("a") %>% 
+  html_attr("href")
+
+html %>% 
+  html_elements("h2")
 
 
+html %>% 
+  html_elements(".usajobs-search-result--core__agency")
 
 ```
+```{r selenium}
+library(tidyverse)
+library(RSelenium)
+library(rvest)
+library(netstat)
+library(data.table)
+library(wdman)
+rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
+                             chromever = NULL,
+                             geckover = "latest",
+                             iedrver = NULL,
+                             phantomver = "2.1.1",
+                             verbose = FALSE,
+                             check = TRUE,
+                             port = free_port())
+#chrome version 131
+#install.packages("binman")
+#selenium()
+#binman::list_versions("chromedriver")
+#chromever = "114.0.5735.90",
+#rs_driver_object$server$log()
+
+remDr <- rs_driver_object$client
+
+remDr$open()
+remDr$navigate(url1)
+
+
+
+
+
+job_list_rough <- remDr$getPageSource()[[1]] %>%
+  read_html() %>% html_nodes('a') %>% html_attr('href') 
+for (i in job_list_rough){
+  if (grepl("/job/", i) == TRUE){
+    print(i) 
+  }
+}
+
+next_button <- remDr$findElement(using = "xpath", '//a[@class="usajobs-search-pagination__next-page"]')
+next_button$clickElement()
+
+```
+
+```{r extra}
+rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
+                             chromever = NULL,
+                             geckover = "latest",
+                             iedrver = NULL,
+                             phantomver = "2.1.1",
+                             verbose = TRUE,
+                             check = TRUE,
+                             port = free_port())
+rs_driver_object <- rsDriver(browser = "chrome",
+                             chromever = "114.0.5735.90",
+                             verbose = FALSE,
+                             port = free_port())
+element <- remDr$findElement(using = "xpath", '//div[contains(@class, "usajobs-search-result--core"')
+element <- remDr$findElements(using = "xpath", '//div[@class="usajobs-search-result--core"')
+
+elements
+element <- remDr$findElement(using = "xpath", '//div[contains(@class, "usajobs-search-result--core"')
+elements <- remDr$findElements(using = "xpath", '//div[@class="usajobs-search-result--core"')
+
+second_try <- remDr$findElement(using = 'class name', 'usajobs-search-result--core__title search-joa-link')
+second_try
+third_try <- remDr$findElement(using = "xpath", '//a[@class="usajobs-search-save-cta"]')
+third_try
+```
+
+
+
+
+
+
+
+
