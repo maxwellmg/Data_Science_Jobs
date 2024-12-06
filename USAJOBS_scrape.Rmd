@@ -1,0 +1,35 @@
+---
+title: "USAJOBS Scrape"
+author: "Maxwell Miller-Golub"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(rvest)
+```
+
+```{r urls}
+#keywords: Data Analyst
+url1 = "https://www.usajobs.gov/Search/Results?jt=Data%20Analyst"
+
+url2 = "https://www.usajobs.gov/Search/Results?jt=Data%20Engineer"
+
+url3 = "https://www.usajobs.gov/Search/Results?jt=Data%20Scientist"
+
+```
+
+
+```{html}
+<div id="page-info" class="usajobs-search-controls__results-count">
+    Viewing 1 – 25 of 327 jobs
+</div>
+```
+
+```{r test}
+
+
+
+```
