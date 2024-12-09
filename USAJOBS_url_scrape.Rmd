@@ -176,6 +176,55 @@ capture.output(appendable_engineer_url_list, file = "data_engineer_urls.txt")
 
 
 
+```{r call_back files}
+# Pull urls back into R environment from txt files
+
+### Data Scientist List
+
+unclean_scientist_url_text <- read.delim("data_scientist_urls.txt")
+
+scientist_clean_list <- c()
+for (list in unclean_scientist_url_text){
+  for (url in list) {
+  clean_url <- strsplit(url, "] ")[[1]][2]
+  scientist_clean_list <- append(scientist_clean_list, clean_url)
+  }
+}
+scientist_clean_list
+
+######################################################################
+
+### Data Engineer List
+
+unclean_engineer_url_text <- read.delim("data_engineer_urls.txt")
+
+engineer_clean_list <- c()
+for (list in unclean_engineer_url_text){
+  for (url in list) {
+  clean_url <- strsplit(url, "] ")[[1]][2]
+  engineer_clean_list <- append(engineer_clean_list, clean_url)
+  }
+}
+engineer_clean_list
+
+######################################################################
+
+### Data Analyst List
+
+unclean_analyst_url_text <- read.delim("data_analyst_urls.txt")
+
+analyst_clean_list <- c()
+for (list in unclean_analyst_url_text){
+  for (url in list) {
+  clean_url <- strsplit(url, "] ")[[1]][2]
+  analyst_clean_list <- append(analyst_clean_list, clean_url)
+  }
+}
+analyst_clean_list
+```
+
+
+
 
 
 
