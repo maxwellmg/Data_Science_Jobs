@@ -7,24 +7,246 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(RSelenium)
+library(rvest)
+library(netstat)
+library(data.table)
+library(wdman)
 ```
 
-## R Markdown
+```{r indie_url_test}
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+test_url_list1 <- c("https://www.usajobs.gov/job/759326100", "https://www.usajobs.gov/job/822710600", "https://www.usajobs.gov/job/821275100", "https://www.usajobs.gov/job/812166900", "https://www.usajobs.gov/job/811561600", "https://www.usajobs.gov/job/821546700", "https://www.usajobs.gov/job/821332600", "https://www.usajobs.gov/job/810753900", "https://www.usajobs.gov/job/820782700", "https://www.usajobs.gov/job/822293400")
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+  test_url_list2 <- c("https://www.usajobs.gov/job/801318600", "https://www.usajobs.gov/job/766967000", "https://www.usajobs.gov/job/812603800", "https://www.usajobs.gov/job/819549800", "https://www.usajobs.gov/job/821250300", "https://www.usajobs.gov/job/820478300", "https://www.usajobs.gov/job/821446200", "https://www.usajobs.gov/job/819907600", "https://www.usajobs.gov/job/821567500", "https://www.usajobs.gov/job/788422000")
 
-```{r cars}
-summary(cars)
+#sample_url <- "https://www.usajobs.gov/job/818787600"
+
+# Open a browser through R
+
+rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
+                             chromever = NULL,
+                             geckover = "latest",
+                             iedrver = NULL,
+                             phantomver = "2.1.1",
+                             verbose = FALSE,
+                             check = TRUE,
+                             port = free_port())
+
+
+remDr <- rs_driver_object$client
+remDr$open()
+
+#create data table
+test_data <- tibble("Job Code" = numeric(), "Date Accessed" = character(), Keyword = "Data Engineer", "Full URL" = character(), Title = character(), Agency = character(), "Pay scale & grade" = character(), "Remote job" = character(), "Telework eligible" = character(), "Travel Required" = character(), "Relocation expenses reimbursed" = character(), "Appointment type" = character(), "Work schedule" = character(), "Hiring Process" = character(), "Promotion Potential" = character(), "Supervisory Status" = character(), "Security Clearance" = character(), "Drug Test" = character(), "salary_min" = numeric(), "salary_max" = numeric(), Qualifications = character())
+
+#test_data
+#remDr$navigate("https://www.usajobs.gov/job/759326100")
+
+for (current_url in test_url_list1){
+remDr$navigate(current_url)
+  
+Sys.sleep(0.5)
+
+html <- remDr$getPageSource()[[1]] %>%
+  read_html() 
+
+# Establish all of the data we will write to our data set
+
+#URL and Header Data
+Job_Code <- as.numeric(strsplit(current_url, "/")[[1]][5])
+Full_URL <- current_url
+Job_Title <- html %>% html_elements(".usajobs-joa-banner__title") %>% html_text2()
+Agency <- html %>% html_elements(".usajobs-joa-banner__dept") %>% html_text2()
+if (Agency != ""){
+  Listed_Agency <- Agency
+} else {
+  Listed_Agency <- html %>% html_elements(".usajobs-joa-banner__agency") %>% html_text2()
+}
+
+# Sidebar Data
+remote_data <- html %>% html_elements(".usajobs-joa-summary__grades") %>% html_text2()
+
+Pay_Scale_And_Grade <- remote_data[[1]]
+Remote_Job <- remote_data[[2]]
+Telework_Eligible <- remote_data[[3]]
+Travel_Required <- remote_data[[4]]
+Relocation_Expenses_Reimbursed <- remote_data[[5]]
+
+extra_details <- html %>% html_elements(".usajobs-joa-summary__value") %>% html_text2()
+
+Appointment_Type <- extra_details[[2]]
+Work_Schedule <- extra_details[[3]]
+Hiring_Process <- extra_details[[4]]
+Promotion_Potential <- extra_details[[5]]
+Supervisory_Status <- extra_details[[6]]
+Security_Clearance <- extra_details[[7]]
+Drug_Test <- extra_details[[8]]
+Salary_Min <- as.numeric(gsub("\\,", "", gsub("\\$", "", strsplit(html %>% html_elements(".usajobs-joa-summary__salary") %>% html_text2(), " ")[[1]][1])))
+Salary_Max <- as.numeric(gsub("\\,", "", gsub("\\$", "", strsplit(html %>% html_elements(".usajobs-joa-summary__salary") %>% html_text2(), " ")[[1]][3])))
+
+# Paragraph Data
+
+Sought_Qualifications <- html %>% html_nodes(xpath = '//*[@id="qualifications"]') %>% html_text2()
+
+# Date Accessed
+Todays_Date <- as.character(Sys.Date())
+
+# Write the data to the tibble
+
+test_data <- test_data %>% 
+  add_row("Job Code" = Job_Code, "Date Accessed" = Todays_Date, Keyword = "Data Engineer", "Full URL" = current_url, Title = Job_Title, Agency = Listed_Agency, "Pay scale & grade" = Pay_Scale_And_Grade, "Remote job" = Remote_Job, "Telework eligible" = Telework_Eligible, "Travel Required" = Travel_Required, "Relocation expenses reimbursed" = Relocation_Expenses_Reimbursed, "Appointment type" = Appointment_Type, "Work schedule" = Work_Schedule, "Hiring Process" = Hiring_Process, "Promotion Potential" = Promotion_Potential, "Supervisory Status" = Supervisory_Status, "Security Clearance" = Security_Clearance, "Drug Test" = Drug_Test, "salary_min" = Salary_Min, "salary_max" = Salary_Max, Qualifications = Sought_Qualifications)
+
+}
+
+#test_data
+
+view(test_data)
+#"Date Accessed" = date(today()), cant get date to write to tibble
+#typeof(date(today()))
+#date(today())
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+```{r qualifications}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+qualifications <- strsplit(html %>% html_nodes(xpath = '//*[@id="qualifications"]') %>% html_text2(), "\n")
+
+qualifications
+
+date(today())
+
+salary_min <- as.numeric(gsub("\\,", "", gsub("\\$", "", strsplit(html %>% html_elements(".usajobs-joa-summary__salary") %>% html_text2(), " ")[[1]][1])))
+
+salary_max <- as.numeric(gsub("\\,", "", gsub("\\$", "", strsplit(html %>% html_elements(".usajobs-joa-summary__salary") %>% html_text2(), " ")[[1]][3])))
+                   
+salary_max
+salary_min
+
+str_replace(salary_min, "$", "")
+gsub("\\,", "", gsub("\\$", "", salary_min))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+``` {r glossary}
+#Glossary:
+# pay scale and grade: A grade refers to the pay scale which sets the pay level and qualifications for the job.
+
+# Telework elligible: Determines if you will be able to work from home on some days.
+# travel required: The amount of travel the job requires.
+
+# relocation expenses reimbursed: Whether or not you will be reimbursed for relocation expenses.
+
+# appointment type: The way that the Federal Government classifies the duration of certain jobs.
+
+# work schedule: Determines the number of hours that you will work during the week.
+
+#hiring process: The Federal Government has three services that determine how you are hired: Competitive, Excepted, and Senior Executive. 
+
+#"Promotion Potential": Determines if you can move up to the next grade within your pay scale.
+
+# supervisory status: Determines if you will be a supervisor.
+
+# security clearance: The level of security clearance required to hold this position.
+
+# Drug Test: Whether or not you will be tested for illegal drug use.
+
+
+
+#remDr$getPageSource()[[1]] %>%
+#  read_html() %>% html_nodes('a') %>% html_attr('href')
+
+#usajobs-joa-summary__grades
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r get_search_length_test}
+html = read_html(url1)
+
+html %>% html_element(".usajobs-search-controls__results-count") %>% html_text2()
+#html %>% html_element(".usajobs-search-noresults-suggestions") %>% html_text2()
+html %>% html_elements("div.page-info")
+#html %>% html_elements(".usajobs-search .usajobs-search-noresults-suggestions")
+
+#".usajobs-search-controls__results-count"
+
+#html %>% 
+#  html_nodes("*") %>% 
+#  html_attr("class") %>% 
+#  unique()
+
+#class="usajobs-search-noresults-suggestions"
+#.usajobs-search-controls__results-count-container no-params usajobs-search-noresults
+```
+
+```{r get_hrefs}
+
+html = read_html(url1)
+
+html %>% 
+  html_elements("a") %>% 
+  html_attr("href")
+
+html %>% 
+  html_elements("h2")
+
+
+html %>% 
+  html_elements(".usajobs-search-result--core__agency")
+
+
+salary <- strsplit("$74,441 - $135,987 per year", " ")
+#salary_max <- strsplit("$74,441 - $135,987 per year", " ")[[3]]
+salary_min <- salary[[1]][1]
+salary_max <- salary[[1]][3]
+salary_min
+salary_max
+```
+
+
+
+```{r extra2}
+rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
+                             chromever = NULL,
+                             geckover = "latest",
+                             iedrver = NULL,
+                             phantomver = "2.1.1",
+                             verbose = TRUE,
+                             check = TRUE,
+                             port = free_port())
+rs_driver_object <- rsDriver(browser = "chrome",
+                             chromever = "114.0.5735.90",
+                             verbose = FALSE,
+                             port = free_port())
+element <- remDr$findElement(using = "xpath", '//div[contains(@class, "usajobs-search-result--core"')
+element <- remDr$findElements(using = "xpath", '//div[@class="usajobs-search-result--core"')
+
+elements
+element <- remDr$findElement(using = "xpath", '//div[contains(@class, "usajobs-search-result--core"')
+elements <- remDr$findElements(using = "xpath", '//div[@class="usajobs-search-result--core"')
+
+
+qualifications
+second_try <- remDr$findElement(using = 'class name', 'usajobs-search-result--core__title search-joa-link')
+second_try
+third_try <- remDr$findElement(using = "xpath", '//a[@class="usajobs-search-save-cta"]')
+third_try
+
+#test_list <- c()
+#for (i in 1:5){
+#  test_list <- append(test_list, i)
+#}
+#test_list
+```
+
