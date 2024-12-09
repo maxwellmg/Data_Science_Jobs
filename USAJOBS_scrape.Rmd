@@ -16,15 +16,19 @@ library(data.table)
 library(wdman)
 ```
 
-```{r indie_url_test}
+```{r indie_url_test sets}
 
 test_url_list1 <- c("https://www.usajobs.gov/job/759326100", "https://www.usajobs.gov/job/822710600", "https://www.usajobs.gov/job/821275100", "https://www.usajobs.gov/job/812166900", "https://www.usajobs.gov/job/811561600", "https://www.usajobs.gov/job/821546700", "https://www.usajobs.gov/job/821332600", "https://www.usajobs.gov/job/810753900", "https://www.usajobs.gov/job/820782700", "https://www.usajobs.gov/job/822293400")
 
   test_url_list2 <- c("https://www.usajobs.gov/job/801318600", "https://www.usajobs.gov/job/766967000", "https://www.usajobs.gov/job/812603800", "https://www.usajobs.gov/job/819549800", "https://www.usajobs.gov/job/821250300", "https://www.usajobs.gov/job/820478300", "https://www.usajobs.gov/job/821446200", "https://www.usajobs.gov/job/819907600", "https://www.usajobs.gov/job/821567500", "https://www.usajobs.gov/job/788422000")
-
+  
 #sample_url <- "https://www.usajobs.gov/job/818787600"
+  
+```
 
-# Open a browser through R
+```{r full_run_through}
+
+# Open a browser through RSelenium
 
 rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
                              chromever = NULL,
@@ -40,12 +44,12 @@ remDr <- rs_driver_object$client
 remDr$open()
 
 #create data table
-test_data <- tibble("Job Code" = numeric(), "Date Accessed" = character(), Keyword = "Data Engineer", "Full URL" = character(), Title = character(), Agency = character(), "Pay scale & grade" = character(), "Remote job" = character(), "Telework eligible" = character(), "Travel Required" = character(), "Relocation expenses reimbursed" = character(), "Appointment type" = character(), "Work schedule" = character(), "Hiring Process" = character(), "Promotion Potential" = character(), "Supervisory Status" = character(), "Security Clearance" = character(), "Drug Test" = character(), "salary_min" = numeric(), "salary_max" = numeric(), Qualifications = character())
+Data_Analyst_Data_Set <- tibble("Job Code" = numeric(), "Date Accessed" = character(), Keyword = "Data Analyst", "Full URL" = character(), Title = character(), Agency = character(), "Pay scale & grade" = character(), "Remote job" = character(), "Telework eligible" = character(), "Travel Required" = character(), "Relocation expenses reimbursed" = character(), "Appointment type" = character(), "Work schedule" = character(), "Hiring Process" = character(), "Promotion Potential" = character(), "Supervisory Status" = character(), "Security Clearance" = character(), "Drug Test" = character(), "salary_min" = numeric(), "salary_max" = numeric(), Qualifications = character())
 
 #test_data
 #remDr$navigate("https://www.usajobs.gov/job/759326100")
 
-for (current_url in test_url_list1){
+for (current_url in analyst_clean_list){
 remDr$navigate(current_url)
   
 Sys.sleep(0.5)
@@ -96,17 +100,34 @@ Todays_Date <- as.character(Sys.Date())
 
 # Write the data to the tibble
 
-test_data <- test_data %>% 
-  add_row("Job Code" = Job_Code, "Date Accessed" = Todays_Date, Keyword = "Data Engineer", "Full URL" = current_url, Title = Job_Title, Agency = Listed_Agency, "Pay scale & grade" = Pay_Scale_And_Grade, "Remote job" = Remote_Job, "Telework eligible" = Telework_Eligible, "Travel Required" = Travel_Required, "Relocation expenses reimbursed" = Relocation_Expenses_Reimbursed, "Appointment type" = Appointment_Type, "Work schedule" = Work_Schedule, "Hiring Process" = Hiring_Process, "Promotion Potential" = Promotion_Potential, "Supervisory Status" = Supervisory_Status, "Security Clearance" = Security_Clearance, "Drug Test" = Drug_Test, "salary_min" = Salary_Min, "salary_max" = Salary_Max, Qualifications = Sought_Qualifications)
+Data_Analyst_Data_Set <- Data_Analyst_Data_Set %>% 
+  add_row("Job Code" = Job_Code, "Date Accessed" = Todays_Date, Keyword = "Data Analyst", "Full URL" = current_url, Title = Job_Title, Agency = Listed_Agency, "Pay scale & grade" = Pay_Scale_And_Grade, "Remote job" = Remote_Job, "Telework eligible" = Telework_Eligible, "Travel Required" = Travel_Required, "Relocation expenses reimbursed" = Relocation_Expenses_Reimbursed, "Appointment type" = Appointment_Type, "Work schedule" = Work_Schedule, "Hiring Process" = Hiring_Process, "Promotion Potential" = Promotion_Potential, "Supervisory Status" = Supervisory_Status, "Security Clearance" = Security_Clearance, "Drug Test" = Drug_Test, "salary_min" = Salary_Min, "salary_max" = Salary_Max, Qualifications = Sought_Qualifications)
 
 }
 
-#test_data
+write_csv(Data_Analyst_Data_Set, "Data_Analyst_Data_Set.csv")
+          
+view(Data_Analyst_Data_Set)
+```
 
-view(test_data)
-#"Date Accessed" = date(today()), cant get date to write to tibble
-#typeof(date(today()))
-#date(today())
+
+```{r clean up dups}
+df2 <- rbind(Data_Analyst_Data_Set, Data_Engineer_Data_Set)
+full_data_with_dups <- rbind(df2, Data_Scientist_Data_Set)
+
+# Remove duplicates, keeping information from the unique column
+df_cleaned <- full_data_with_dups %>%
+  group_by(`Job Code`, `Date Accessed`, `Full URL`, Title, Agency, `Pay scale & grade`, `Remote job`, `Telework eligible`, `Travel Required`, `Relocation expenses reimbursed`, `Appointment type`, `Work schedule`, `Hiring Process`, `Promotion Potential`, `Supervisory Status`, `Security Clearance`, `Drug Test`, `salary_min`, `salary_max`, Qualifications) %>%  # Group by all columns except the unique one
+  summarize(
+    Keyword = paste(unique(Keyword), collapse = ", "),  # Combine the unique_column values
+    .groups = "drop"  # Remove grouping structure
+  )
+```
+
+
+```{r export tibbles}
+
+write_csv(df_cleaned, "Full_Clean_Data_Jobs_Dataset.csv")
 ```
 
 
