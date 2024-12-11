@@ -14,6 +14,7 @@ library(rvest)
 library(netstat)
 library(data.table)
 library(wdman)
+library(stopwords)
 ```
 
 ```{r indie_url_test sets}
@@ -130,6 +131,106 @@ df_cleaned <- full_data_with_dups %>%
 write_csv(df_cleaned, "Full_Clean_Data_Jobs_Dataset.csv")
 ```
 
+
+```{r}
+library(readr)
+numbers <- c("one", "two", "three", "four", "five", "six", "seven", "eight", 
+             "nine", "ten")
+removal_words <- stopwords::stopwords("en")
+removal_words <- append(removal_words, "qualification")
+removal_words <- append(removal_words, "qualifications")
+removal_words <- append(removal_words, "")
+removal_words <- append(removal_words, letters)
+removal_words <- append(removal_words, numbers)
+removal_words
+
+
+#library(purrr)
+
+Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
+#typeof(Full_Clean_Data_Jobs_Dataset)
+
+modding_table <- as_tibble(Full_Clean_Data_Jobs_Dataset)
+
+cleaned <- modding_table %>% 
+  mutate(Qualifications = map(Qualifications, shrink_qualifications))
+
+cleaned[119, "Qualifications"]
+
+view(cleaned)
+
+modding_table %>% 
+  select(Qualifications) %>% 
+  modify(Qualifications = map_chr(Qualifications, shrink_qualifications(Qualifications)))
+
+library(dplyr)
+modding_table %>% 
+  select(`Job Code`) %>% 
+  rename("jobcode" = `Job Code`) %>% 
+  mutate("jobcode" = add_one(jobcode))
+
+  #modify( = add_one(`Job Code`))
+  #modify(Qualifications = map_chr(Qualifications, shrink_qualifications(Qualifications)))
+
+#m2 <- modding_table %>% 
+#  select(Qualifications) %>% 
+#  mutate(Qualifications = str_replace_all(Qualifications, "\n", " "),
+#         Qualifications = strsplit(Qualifications, " "),
+#         less_space_qualifications = lapply(Qualifications, function(x) gsub("\\s+", "", x)))
+         #Split2_Qualifications = strsplit(Split_Qualifications, "\n"))
+#view(m2)
+
+# Modify stop_words list
+
+df <- tibble(
+  id = 1:5,
+  value = c(2, 4, 6, 8, 10),
+  dummy = 1
+)
+df
+letters
+test1 <- modding_table[10,"Qualifications"]
+test2 <- modding_table[1,"Job Code"]
+test2
+
+add_one <- function(test_code){
+  test_code <- test_code + 1
+  return(test_code)
+}
+
+
+test1 <- modding_table[1,"Qualifications"]
+
+shrink_qualifications <- function(sample_qualification){
+  sample_qualification <- str_replace_all(sample_qualification, "\n", " ")
+  sample_qualification <- strsplit(sample_qualification, " ")
+  sample_qualification <- lapply(sample_qualification, function(s) s[nchar(s) <= 25])
+  sample_qualification <- lapply(sample_qualification, function(s) gsub("[^[:alnum:]]", "", s))
+  sample_qualification <- lapply(sample_qualification, tolower)
+  sample_qualification <- sample_qualification[[1]]
+  sample_qualification <- base::setdiff(sample_qualification, removal_words)
+  #sample_qualification <- vapply(sample_qualification, function(x) if (!grepl("^\\d+$", x)) x else NULL, FUN.VALUE = character(1))
+  #sample_qualification <- sample_qualification[!is.null(sample_qualification)]
+  sample_qualification <- lapply(sample_qualification, function(x) if (!grepl("\\d", x)) x else NULL)
+sample_qualification <- base::Filter(base::Negate(is.null), sample_qualification)
+sample_qualification <- unlist(sample_qualification)
+sample_qualification <- list(sample_qualification)
+sample_qualification <- paste(sample_qualification, sep = " ")
+return(sample_qualification)
+}
+
+
+shrink_qualifications(test1)
+
+base::Negate()
+shrink_qualifications(test1)
+?setdiff
+
+for (row in df){
+  print(row$dummy)
+}
+df
+```
 
 ```{r qualifications}
 
