@@ -132,8 +132,10 @@ write_csv(df_cleaned, "Full_Clean_Data_Jobs_Dataset.csv")
 ```
 
 
-```{r}
+```{r fixing_qualification}
 library(readr)
+
+# Edit the list of words to remove from Qualifications
 numbers <- c("one", "two", "three", "four", "five", "six", "seven", "eight", 
              "nine", "ten")
 removal_words <- stopwords::stopwords("en")
@@ -144,62 +146,7 @@ removal_words <- append(removal_words, letters)
 removal_words <- append(removal_words, numbers)
 removal_words
 
-
-#library(purrr)
-
-Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
-#typeof(Full_Clean_Data_Jobs_Dataset)
-
-modding_table <- as_tibble(Full_Clean_Data_Jobs_Dataset)
-
-cleaned <- modding_table %>% 
-  mutate(Qualifications = map(Qualifications, shrink_qualifications))
-
-cleaned[119, "Qualifications"]
-
-view(cleaned)
-
-modding_table %>% 
-  select(Qualifications) %>% 
-  modify(Qualifications = map_chr(Qualifications, shrink_qualifications(Qualifications)))
-
-library(dplyr)
-modding_table %>% 
-  select(`Job Code`) %>% 
-  rename("jobcode" = `Job Code`) %>% 
-  mutate("jobcode" = add_one(jobcode))
-
-  #modify( = add_one(`Job Code`))
-  #modify(Qualifications = map_chr(Qualifications, shrink_qualifications(Qualifications)))
-
-#m2 <- modding_table %>% 
-#  select(Qualifications) %>% 
-#  mutate(Qualifications = str_replace_all(Qualifications, "\n", " "),
-#         Qualifications = strsplit(Qualifications, " "),
-#         less_space_qualifications = lapply(Qualifications, function(x) gsub("\\s+", "", x)))
-         #Split2_Qualifications = strsplit(Split_Qualifications, "\n"))
-#view(m2)
-
-# Modify stop_words list
-
-df <- tibble(
-  id = 1:5,
-  value = c(2, 4, 6, 8, 10),
-  dummy = 1
-)
-df
-letters
-test1 <- modding_table[10,"Qualifications"]
-test2 <- modding_table[1,"Job Code"]
-test2
-
-add_one <- function(test_code){
-  test_code <- test_code + 1
-  return(test_code)
-}
-
-
-test1 <- modding_table[1,"Qualifications"]
+# The function to clean qualifications paragraphs to be lists of viable words
 
 shrink_qualifications <- function(sample_qualification){
   sample_qualification <- str_replace_all(sample_qualification, "\n", " ")
@@ -215,21 +162,36 @@ shrink_qualifications <- function(sample_qualification){
 sample_qualification <- base::Filter(base::Negate(is.null), sample_qualification)
 sample_qualification <- unlist(sample_qualification)
 sample_qualification <- list(sample_qualification)
-sample_qualification <- paste(sample_qualification, sep = " ")
+sample_qualification <- sapply(sample_qualification, function(x) paste(x, collapse = " "))
+sample_qualification <- as.character(sample_qualification)
 return(sample_qualification)
 }
 
 
-shrink_qualifications(test1)
+Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
+#typeof(Full_Clean_Data_Jobs_Dataset)
 
-base::Negate()
-shrink_qualifications(test1)
-?setdiff
+modding_table <- as_tibble(Full_Clean_Data_Jobs_Dataset)
 
-for (row in df){
-  print(row$dummy)
-}
-df
+all_3 <- modding_table %>% 
+  filter(Keyword == "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
+
+all_data_for_json <- modding_table %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications)) %>% 
+  select(-Qualifications)
+
+view(all_data_for_json)
+
+clear_qualifications <- modding_table %>% 
+  select(-Qualifications)
+
+library(jsonlite)
+write_json(all_3, "Only_Definite_Data_Science_Jobs_Dataset.json")
+write_json(all_data_for_json, "All_Data_Fixed_Qualifications.json")
+write_csv(all_3, "Only_Definite_Data_Science_Jobs_Dataset.csv")
+write_csv(clear_qualifications, "Data_Jobs_Dataset_Without_Qualifications.csv")
+
 ```
 
 ```{r qualifications}
