@@ -26,11 +26,11 @@ library(jsonlite)
 
 ### 2a) Combine data tables and remove duplicate jobs
 ```{r clean up dups}
-Data_Scientist_Data_Set <- read_csv("Data_Scientist_Data_Set.csv")
+Data_Scientist_Data_Set <- read_csv("Individual_Scrape_CSVs/Data_Scientist_Data_Set.csv")
 
-Data_Analyst_Data_Set <- read_csv("Data_Analyst_Data_Set.csv")
+Data_Analyst_Data_Set <- read_csv("Individual_Scrape_CSVs/Data_Analyst_Data_Set.csv")
 
-Data_Engineer_Data_Set <- read_csv("Data_Engineer_Data_Set.csv")
+Data_Engineer_Data_Set <- read_csv("Individual_Scrape_CSVs/Data_Engineer_Data_Set.csv")
 
 df2 <- rbind(Data_Analyst_Data_Set, Data_Engineer_Data_Set)
 full_data_with_dups <- rbind(df2, Data_Scientist_Data_Set)
@@ -63,7 +63,7 @@ removal_words <- append(removal_words, numbers)
 
 ### 2c) Telework, Travel, Schedule, Remote, Relocation Columns Cleaned and Combined
 ```{r clean columns}
-Full_Clean_Data_Jobs_Dataset <- read_csv("Full_Clean_Data_Jobs_Dataset.csv")
+Full_Clean_Data_Jobs_Dataset <- read_csv("various_output_files/Full_Clean_Data_Jobs_Dataset.csv")
 
 cleaned_five_columns <- Full_Clean_Data_Jobs_Dataset %>%
   mutate(`Telework eligible` = case_when(
@@ -161,8 +161,8 @@ clear_qualifications <- jobs_tibble %>%
 
 head(clear_qualifications)
 
-#write_json(all_3, "Only_Definite_Data_Science_Jobs_Dataset.json")
-#write_json(all_data_for_json, "All_Data_Fixed_Qualifications.json")
+#write_json(all_3, "Final_Data_Science_Only_Jobs_Dataset.json")
+#write_json(all_data_for_json, "Final_Full_Dataset.json")
 #write_csv(all_3, "Only_Definite_Data_Science_Jobs_Dataset.csv")
 #write_csv(clear_qualifications, "Data_Jobs_Dataset_Without_Qualifications.csv")
 
@@ -170,25 +170,91 @@ head(clear_qualifications)
 
 # Step 3: Analysis
 
-### 3a) Logistic Regression of Supervisors and Salary
-```{r logistic_regression}
+### 3a) Prepping both job groups
+```{r prepping special_data}
+main_3 <- jobs_tibble %>% 
+  filter(Keyword == "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
 
-supervisor_data <- cleaned_seven_columns %>% 
-  select(`Supervisory Status`, salary_min, salary_max) %>% 
-  mutate(supervisor_binary = case_when(
-    `Supervisory Status` == "No" ~ 0,
-    `Supervisory Status` == "Yes" ~ 1
-  ))
+the_rest <- jobs_tibble %>% 
+  filter(Keyword != "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
+```
 
-glm(supervisor_binary ~ salary_min + salary_max, family = "binomial", data = supervisor_data) -> supervisor_model
-summary(supervisor_model)
-#plot(supervisor_model)
-ggplot(supervisor_data, aes(x=salary_max, y=supervisor_binary)) + 
-        geom_point(alpha=.5) +
-        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
-ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) + 
-        geom_point(alpha=.5) +
-        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+### 3b) Salary Expectations
+```{r research_questions}
+#RQ2: What salaries can be expected in the field?
+
+#Salary Minimum for All Jobs
+summary(the_rest$salary_min)
+ggplot(data = the_rest) +
+  geom_histogram(aes(x = salary_min), bins = 20)+
+  ggtitle("Salary Minimum for All Jobs")
+#Salary Minimum for Just Data Science Jobs
+summary(all_3$salary_min)
+ggplot(data = all_3) +
+  geom_histogram(aes(x = salary_min), bins = 20)+
+  ggtitle("Salary Minimum for Data Science Jobs")
+
+#Salary Maximum for All Jobs
+summary(the_rest$salary_max)
+ggplot(data = the_rest) +
+  geom_histogram(aes(x = salary_max), bins = 20)+
+  ggtitle("Salary Maximum for All Jobs")
+#Salary Maximum for Just Data Science Jobs
+summary(all_3$salary_max)
+ggplot(data = all_3) +
+  geom_histogram(aes(x = salary_max), bins = 20)+
+  ggtitle("Salary Maximum for Data Science Jobs")
+
+
+#mean(all_3$salary_min)
+#sd(all_3$salary_min)
+# n = 74
+
+#mean(the_rest$salary_min)
+#sd(the_rest$salary_min)
+# n = 2034
+
+#mean(all_3$salary_max)
+#sd(all_3$salary_max)
+# n = 74
+
+#mean(the_rest$salary_max)
+#sd(the_rest$salary_max)
+# n = 2034
+```
+
+### 3c) Remote/Telework
+```{r RQ4}
+#RQ4: Are jobs/careers still operating remotely (since COVID)?
+the_rest %>% 
+  group_by(`Telework eligible`) %>% 
+  count(`Telework eligible`)
+
+all_3 %>% 
+  group_by(`Telework eligible`) %>% 
+  count(`Telework eligible`)
+
+#(73/2034)*100			
+#(355/2034)*100			
+#(1606/2034)*100			
+
+#(7/74)*100			
+#(13/74)*100			
+#(54/74)*100	
+```
+
+### 3d) Agencies hiring Data Scientists
+```{r RQ5}
+#RQ5: Who’s hiring Data Scientists?
+the_rest %>% 
+  group_by(Agency) %>% 
+  count(Agency)
+
+all_3 %>% 
+  group_by(Agency) %>% 
+  count(Agency)
 ```
 
 # 4: Extra
@@ -220,3 +286,24 @@ ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) +
 
 ```
 
+### 4b) Logistic Regression of Supervisors and Salary
+```{r RQextra}
+#RQ: Is there a relationship between salary and supervisor positions?
+
+supervisor_data <- cleaned_seven_columns %>% 
+  select(`Supervisory Status`, salary_min, salary_max) %>% 
+  mutate(supervisor_binary = case_when(
+    `Supervisory Status` == "No" ~ 0,
+    `Supervisory Status` == "Yes" ~ 1
+  ))
+
+glm(supervisor_binary ~ salary_min + salary_max, family = "binomial", data = supervisor_data) -> supervisor_model
+summary(supervisor_model)
+#plot(supervisor_model)
+ggplot(supervisor_data, aes(x=salary_max, y=supervisor_binary)) + 
+        geom_point(alpha=.5) +
+        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) + 
+        geom_point(alpha=.5) +
+        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+```
