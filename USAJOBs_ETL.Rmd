@@ -2,7 +2,9 @@
 title: "Final_Project_USAJOBs_ETL"
 author: "Maxwell Miller-Golub"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -316,6 +318,12 @@ write_csv(Data_Analyst_Data_Set, "Data_Analyst_Data_Set.csv")
 
 ### 2a) Combine data tables and remove duplicate jobs
 ```{r clean up dups}
+Data_Scientist_Data_Set <- read_csv("Individual_Scrape_CSVs/Data_Scientist_Data_Set.csv")
+
+Data_Analyst_Data_Set <- read_csv("Individual_Scrape_CSVs/Data_Analyst_Data_Set.csv")
+
+Data_Engineer_Data_Set <- read_csv("Individual_Scrape_CSVs/Data_Engineer_Data_Set.csv")
+
 df2 <- rbind(Data_Analyst_Data_Set, Data_Engineer_Data_Set)
 full_data_with_dups <- rbind(df2, Data_Scientist_Data_Set)
 
@@ -327,7 +335,7 @@ df_cleaned <- full_data_with_dups %>%
     .groups = "drop"  # Remove grouping structure
   )
 
-write_csv(df_cleaned, "Full_Clean_Data_Jobs_Dataset.csv")
+#write_csv(df_cleaned, "Full_Clean_Data_Jobs_Dataset.csv")
 ```
 
 ### 2b) Build stopwords out to clean "Qualifications" more
@@ -345,69 +353,18 @@ removal_words <- append(removal_words, numbers)
 
 ```
 
-### 2c) Function to clean qualifications -> create lists of words
-```{r qualifications_function}
-
-shrink_qualifications <- function(sample_qualification){
-  sample_qualification <- str_replace_all(sample_qualification, "\n", " ")
-  sample_qualification <- strsplit(sample_qualification, " ")
-  sample_qualification <- lapply(sample_qualification, function(s) s[nchar(s) <= 25])
-  sample_qualification <- lapply(sample_qualification, function(s) gsub("[^[:alnum:]]", "", s))
-  sample_qualification <- lapply(sample_qualification, tolower)
-  sample_qualification <- sample_qualification[[1]]
-  sample_qualification <- base::setdiff(sample_qualification, removal_words)
-  #sample_qualification <- vapply(sample_qualification, function(x) if (!grepl("^\\d+$", x)) x else NULL, FUN.VALUE = character(1))
-  #sample_qualification <- sample_qualification[!is.null(sample_qualification)]
-  sample_qualification <- lapply(sample_qualification, function(x) if (!grepl("\\d", x)) x else NULL)
-sample_qualification <- base::Filter(base::Negate(is.null), sample_qualification)
-sample_qualification <- unlist(sample_qualification)
-sample_qualification <- list(sample_qualification)
-sample_qualification <- sapply(sample_qualification, function(x) paste(x, collapse = " "))
-sample_qualification <- as.character(sample_qualification)
-return(sample_qualification)
-}
-```
-
-### 2d) Clean Qualifications and Export to CSV and JSON
-```{r clean_qualifications_and export}
-
-Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
-#typeof(Full_Clean_Data_Jobs_Dataset)
-
-modding_table <- as_tibble(Full_Clean_Data_Jobs_Dataset)
-
-all_3 <- modding_table %>% 
-  filter(Keyword == "Data Analyst, Data Engineer, Data Scientist") %>% 
-  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
-
-all_data_for_json <- modding_table %>% 
-  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications)) %>% 
-  select(-Qualifications)
-
-view(all_data_for_json)
-
-clear_qualifications <- modding_table %>% 
-  select(-Qualifications)
-
-write_json(all_3, "Only_Definite_Data_Science_Jobs_Dataset.json")
-write_json(all_data_for_json, "All_Data_Fixed_Qualifications.json")
-write_csv(all_3, "Only_Definite_Data_Science_Jobs_Dataset.csv")
-write_csv(clear_qualifications, "Data_Jobs_Dataset_Without_Qualifications.csv")
-
-```
-
-### 2e) Telework, Travel, Schedule, Remote, Relocation Columns Cleaned and Combined
+### 2c) Telework, Travel, Schedule, Remote, Relocation Columns Cleaned and Combined
 ```{r clean columns}
-#Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
+Full_Clean_Data_Jobs_Dataset <- read_csv("various_output_files/Full_Clean_Data_Jobs_Dataset.csv")
 
-cleaned_five <- Full_Clean_Data_Jobs_Dataset %>%
+cleaned_five_columns <- Full_Clean_Data_Jobs_Dataset %>%
   mutate(`Telework eligible` = case_when(
     str_sub(`Telework eligible`, 1, 3) == "Yes" ~ "Yes",
     `Telework eligible` == "No" ~ "No",
     `Telework eligible` == "Not applicable, this is a remote position." ~ "N/A (Remote Position)",
     TRUE ~ "Unspecified"
   )) %>% 
-  # Removes 80 cases of the 2500 where the data scraped incorrectly
+  # Removes 80 cases of the 2100 where the data scraped incorrectly
   filter(`Telework eligible` != "Unspecified") %>% 
   mutate(`Travel Required` = case_when(
     str_starts(`Travel Required`, "25% or less") | 
@@ -435,18 +392,11 @@ cleaned_five <- Full_Clean_Data_Jobs_Dataset %>%
     `Relocation expenses reimbursed` == "No" ~ "No",
     TRUE ~ "Unspecified"
   ))
-
-#write_json(cleaned_five, "12-12_Cleaned_Data.json")
-#write_csv(cleaned_five, "12-12_Cleaned_Data.csv")
 ```
 
-### 2f) Jobs with hourly wages are converted to salaries (based on 40hrs/52wks) 
+### 2d) Jobs with hourly wages are converted to salaries (based on 40hrs/52wks) 
 ```{r fix_hourly}
-cleaned_five %>% 
-  filter(salary_min < 54) %>% 
-  select(salary_min, salary_max)
-  
-cleaned_seven <- cleaned_five %>% 
+cleaned_seven_columns <- cleaned_five_columns %>% 
   mutate(salary_min = case_when(
     salary_min < 54 & salary_min > 2 ~ salary_min*40*52,
     TRUE ~ salary_min
@@ -456,29 +406,147 @@ cleaned_seven <- cleaned_five %>%
     TRUE ~ salary_max
     ))
 
+head(cleaned_seven_columns)
+```
+
+### 2e) Function to clean qualifications -> create lists of words
+```{r qualifications_function}
+
+shrink_qualifications <- function(sample_qualification){
+  sample_qualification <- str_replace_all(sample_qualification, "\n", " ")
+  sample_qualification <- strsplit(sample_qualification, " ")
+  sample_qualification <- lapply(sample_qualification, function(s) s[nchar(s) <= 25])
+  sample_qualification <- lapply(sample_qualification, function(s) gsub("[^[:alnum:]]", "", s))
+  sample_qualification <- lapply(sample_qualification, tolower)
+  sample_qualification <- sample_qualification[[1]]
+  sample_qualification <- base::setdiff(sample_qualification, removal_words)
+  sample_qualification <- lapply(sample_qualification, function(x) if (!grepl("\\d", x)) x else NULL)
+sample_qualification <- base::Filter(base::Negate(is.null), sample_qualification)
+sample_qualification <- unlist(sample_qualification)
+sample_qualification <- list(sample_qualification)
+sample_qualification <- sapply(sample_qualification, function(x) paste(x, collapse = " "))
+sample_qualification <- as.character(sample_qualification)
+return(sample_qualification)
+}
+```
+
+### 2f) Clean Qualifications and Export to CSV and JSON
+```{r clean_qualifications_and export}
+
+jobs_tibble <- as_tibble(cleaned_seven_columns)
+
+# Splitting data here into different outputs. Cleaning qualifications for the 80 jobs that match on all three keywords (all_3), cleaning qualifications for all jobs for a master table (all_data_for_json), and getting rid of qualifications on the rest to make ShinyApp run more easily (clear_qualifications)
+
+all_3 <- jobs_tibble %>% 
+  filter(Keyword == "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
+
+head(all_3)
+
+all_data_for_json <- jobs_tibble %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
+
+head(all_data_for_json)
+
+clear_qualifications <- jobs_tibble %>% 
+  select(-Qualifications)
+
+head(clear_qualifications)
+
+#write_json(all_3, "Final_Data_Science_Only_Jobs_Dataset.json")
+#write_json(all_data_for_json, "Final_Full_Dataset.json")
+#write_csv(all_3, "Only_Definite_Data_Science_Jobs_Dataset.csv")
+#write_csv(clear_qualifications, "Data_Jobs_Dataset_Without_Qualifications.csv")
+
 ```
 
 # Step 3: Analysis
 
-### 3a) Logistic Regression of Supervisors and Salary
-```{r logistic_regression}
+### 3a) Prepping both job groups
+```{r prepping special_data}
+main_3 <- jobs_tibble %>% 
+  filter(Keyword == "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
 
-supervisor_data <- cleaned_seven %>% 
-  select(`Supervisory Status`, salary_min, salary_max) %>% 
-  mutate(supervisor_binary = case_when(
-    `Supervisory Status` == "No" ~ 0,
-    `Supervisory Status` == "Yes" ~ 1
-  ))
+the_rest <- jobs_tibble %>% 
+  filter(Keyword != "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
+```
 
-glm(supervisor_binary ~ salary_min + salary_max, family = "binomial", data = supervisor_data) -> supervisor_model
-summary(supervisor_model)
-#plot(supervisor_model)
-ggplot(supervisor_data, aes(x=salary_max, y=supervisor_binary)) + 
-        geom_point(alpha=.5) +
-        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
-ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) + 
-        geom_point(alpha=.5) +
-        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+### 3b) Salary Expectations
+```{r research_questions}
+#RQ2: What salaries can be expected in the field?
+
+#Salary Minimum for All Jobs
+summary(the_rest$salary_min)
+ggplot(data = the_rest) +
+  geom_histogram(aes(x = salary_min), bins = 20)+
+  ggtitle("Salary Minimum for All Jobs")
+#Salary Minimum for Just Data Science Jobs
+summary(all_3$salary_min)
+ggplot(data = all_3) +
+  geom_histogram(aes(x = salary_min), bins = 20)+
+  ggtitle("Salary Minimum for Data Science Jobs")
+
+#Salary Maximum for All Jobs
+summary(the_rest$salary_max)
+ggplot(data = the_rest) +
+  geom_histogram(aes(x = salary_max), bins = 20)+
+  ggtitle("Salary Maximum for All Jobs")
+#Salary Maximum for Just Data Science Jobs
+summary(all_3$salary_max)
+ggplot(data = all_3) +
+  geom_histogram(aes(x = salary_max), bins = 20)+
+  ggtitle("Salary Maximum for Data Science Jobs")
+
+
+#mean(all_3$salary_min)
+#sd(all_3$salary_min)
+# n = 74
+
+#mean(the_rest$salary_min)
+#sd(the_rest$salary_min)
+# n = 2034
+
+#mean(all_3$salary_max)
+#sd(all_3$salary_max)
+# n = 74
+
+#mean(the_rest$salary_max)
+#sd(the_rest$salary_max)
+# n = 2034
+```
+
+### 3c) Remote/Telework
+```{r RQ4}
+#RQ4: Are jobs/careers still operating remotely (since COVID)?
+the_rest %>% 
+  group_by(`Telework eligible`) %>% 
+  count(`Telework eligible`)
+
+all_3 %>% 
+  group_by(`Telework eligible`) %>% 
+  count(`Telework eligible`)
+
+#(73/2034)*100			
+#(355/2034)*100			
+#(1606/2034)*100			
+
+#(7/74)*100			
+#(13/74)*100			
+#(54/74)*100	
+```
+
+### 3d) Agencies hiring Data Scientists
+```{r RQ5}
+#RQ5: Who’s hiring Data Scientists?
+the_rest %>% 
+  group_by(Agency) %>% 
+  count(Agency)
+
+all_3 %>% 
+  group_by(Agency) %>% 
+  count(Agency)
 ```
 
 # 4: Extra
@@ -510,3 +578,24 @@ ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) +
 
 ```
 
+### 4b) Logistic Regression of Supervisors and Salary
+```{r RQextra}
+#RQ: Is there a relationship between salary and supervisor positions?
+
+supervisor_data <- cleaned_seven_columns %>% 
+  select(`Supervisory Status`, salary_min, salary_max) %>% 
+  mutate(supervisor_binary = case_when(
+    `Supervisory Status` == "No" ~ 0,
+    `Supervisory Status` == "Yes" ~ 1
+  ))
+
+glm(supervisor_binary ~ salary_min + salary_max, family = "binomial", data = supervisor_data) -> supervisor_model
+summary(supervisor_model)
+#plot(supervisor_model)
+ggplot(supervisor_data, aes(x=salary_max, y=supervisor_binary)) + 
+        geom_point(alpha=.5) +
+        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) + 
+        geom_point(alpha=.5) +
+        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+```
