@@ -1,0 +1,512 @@
+---
+title: "Final_Project_USAJOBs_ETL"
+author: "Maxwell Miller-Golub"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 999)
+
+library(tidyverse)
+library(RSelenium)
+library(rvest)
+library(netstat)
+library(data.table)
+library(wdman)
+library(stopwords)
+library(readr)
+library(jsonlite)
+```
+
+# Step 1: Extract
+
+### 1a) Starting URLs
+```{r base_urls}
+# Each page for the urls below contain 25 hits for public sector jobs.
+
+#keywords: Data Analyst
+url1 = "https://www.usajobs.gov/Search/Results?jt=Data%20Analyst"
+#keywords: Data Engineer
+url2 = "https://www.usajobs.gov/Search/Results?jt=Data%20Engineer"
+#keywords: Data Scientist
+url3 = "https://www.usajobs.gov/Search/Results?jt=Data%20Scientist"
+
+```
+
+### 1b) Get all job URLs
+```{r url_scraper}
+
+rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
+                             chromever = NULL,
+                             geckover = "latest",
+                             iedrver = NULL,
+                             phantomver = "2.1.1",
+                             verbose = FALSE,
+                             check = TRUE,
+                             port = free_port())
+
+remDr <- rs_driver_object$client
+
+remDr$open()
+remDr$navigate(url2)
+
+data_scientist_url_list <- list()
+data_analyst_url_list <- list()
+data_engineer_url_list <- list()
+
+cond <- TRUE
+
+while (cond == TRUE) {
+Sys.sleep(0.5)
+  
+job_list_rough <- remDr$getPageSource()[[1]] %>%
+  read_html() %>% html_nodes('a') %>% html_attr('href') 
+
+page_urls <- list()
+
+for (i in job_list_rough){
+  if (grepl("/job/", i) == TRUE){
+    page_urls <- append(page_urls, i)
+  }
+}
+data_engineer_url_list <- rbindlist(list(data_engineer_url_list, page_urls))
+
+tryCatch(
+  {
+    next_button <- remDr$findElement(using = "xpath", '//a[@class="usajobs-search-pagination__next-page"]')
+    next_button$clickElement()
+  },
+  error=function(e) {
+    print("Script Complete!")
+    cond <<- FALSE
+  }
+)
+if (cond == FALSE){
+  break
+}
+}
+
+```
+
+### 1c) Save URLs in CSV files
+```{r output_csv}
+# The following couple lines of code can't just be repeated. The extra page urls from running the code chunk above will be added back to the data before exporting it to txt files below.
+
+#extra_data_scientist_urls <- page_urls
+#extra_data_analyst_urls <- page_urls
+#extra_data_engineer_urls <- page_urls
+
+
+# Time to export. After establishing the "leading url" to add to the beginning of each href, the code will append the last couple of urls that didn't fit (because rbindlist was looking for exactly 25 inputs and the last page didnt have 25). After appending the final urls, capture.output creates an output file of all urls. The result is 3 text files with (likely some overlapping) urls that each lead to a single job posting. The next step will take each url and scrape it for pertinent information
+
+leading_url <- "https://www.usajobs.gov"
+
+
+
+appendable_analyst_url_list <- c()
+for (section in data_analyst_url_list){
+  for (row in section) {
+    for (i in row) {
+      i <- paste(leading_url, i, sep = "")
+      appendable_analyst_url_list <- append(appendable_analyst_url_list, i)
+    }
+  }
+}
+
+
+for (row in extra_data_analyst_urls){
+  for (i in row) {
+    i <- paste(leading_url, i, sep = "")
+    appendable_analyst_url_list <- append(appendable_analyst_url_list, i)
+  }
+}
+
+appendable_analyst_url_list
+
+
+capture.output(appendable_analyst_url_list, file = "data_analyst_urls.txt")
+
+######################################################################
+
+# Do the same for data scientist list
+
+appendable_scientist_url_list <- c()
+for (section in data_scientist_url_list){
+  for (row in section) {
+    for (i in row) {
+      i <- paste(leading_url, i, sep = "")
+      appendable_scientist_url_list <- append(appendable_scientist_url_list, i)
+    }
+  }
+}
+
+
+for (row in extra_data_scientist_urls){
+  for (i in row) {
+    i <- paste(leading_url, i, sep = "")
+    appendable_scientist_url_list <- append(appendable_scientist_url_list, i)
+  }
+}
+
+capture.output(appendable_scientist_url_list, file = "data_scientist_urls.txt")
+
+
+######################################################################
+# Do the same for data engineer list
+
+appendable_engineer_url_list <- c()
+for (section in data_engineer_url_list){
+  for (row in section) {
+    for (i in row) {
+      i <- paste(leading_url, i, sep = "")
+      appendable_engineer_url_list <- append(appendable_engineer_url_list, i)
+    }
+  }
+}
+
+
+for (row in extra_data_engineer_urls){
+  for (i in row) {
+    i <- paste(leading_url, i, sep = "")
+    appendable_engineer_url_list <- append(appendable_engineer_url_list, i)
+  }
+}
+
+
+capture.output(appendable_engineer_url_list, file = "data_engineer_urls.txt")
+
+```
+
+### 1d) Bring CSV files back into R memory
+```{r call_back files}
+# Pull urls back into R environment from txt files
+
+### Data Scientist List
+
+unclean_scientist_url_text <- read.delim("data_scientist_urls.txt")
+
+scientist_clean_list <- c()
+for (list in unclean_scientist_url_text){
+  for (url in list) {
+  clean_url <- strsplit(url, "] ")[[1]][2]
+  scientist_clean_list <- append(scientist_clean_list, clean_url)
+  }
+}
+scientist_clean_list
+
+######################################################################
+
+### Data Engineer List
+
+unclean_engineer_url_text <- read.delim("data_engineer_urls.txt")
+
+engineer_clean_list <- c()
+for (list in unclean_engineer_url_text){
+  for (url in list) {
+  clean_url <- strsplit(url, "] ")[[1]][2]
+  engineer_clean_list <- append(engineer_clean_list, clean_url)
+  }
+}
+engineer_clean_list
+
+######################################################################
+
+### Data Analyst List
+
+unclean_analyst_url_text <- read.delim("data_analyst_urls.txt")
+
+analyst_clean_list <- c()
+for (list in unclean_analyst_url_text){
+  for (url in list) {
+  clean_url <- strsplit(url, "] ")[[1]][2]
+  analyst_clean_list <- append(analyst_clean_list, clean_url)
+  }
+}
+analyst_clean_list
+```
+
+### 1e) Create data tables for each Keyword scrape
+```{r webpage_scraper}
+
+#lists to cycle through for scrape analyst_clean_list, engineer_clean_list, scientist_clean_list
+
+# Open a browser through RSelenium
+
+rs_driver_object <- rsDriver(browser = c("chrome", "firefox", "phantomjs", "internet explorer"),
+                             chromever = NULL,
+                             geckover = "latest",
+                             iedrver = NULL,
+                             phantomver = "2.1.1",
+                             verbose = FALSE,
+                             check = TRUE,
+                             port = free_port())
+
+
+remDr <- rs_driver_object$client
+remDr$open()
+
+#create data table
+Data_Analyst_Data_Set <- tibble("Job Code" = numeric(), "Date Accessed" = character(), Keyword = "Data Analyst", "Full URL" = character(), Title = character(), Agency = character(), "Pay scale & grade" = character(), "Remote job" = character(), "Telework eligible" = character(), "Travel Required" = character(), "Relocation expenses reimbursed" = character(), "Appointment type" = character(), "Work schedule" = character(), "Hiring Process" = character(), "Promotion Potential" = character(), "Supervisory Status" = character(), "Security Clearance" = character(), "Drug Test" = character(), "salary_min" = numeric(), "salary_max" = numeric(), Qualifications = character())
+
+#remDr$navigate("https://www.usajobs.gov/job/759326100")
+
+for (current_url in analyst_clean_list){
+remDr$navigate(current_url)
+  
+Sys.sleep(0.5)
+
+html <- remDr$getPageSource()[[1]] %>%
+  read_html() 
+
+# Establish all of the data we will write to our data set
+
+#URL and Header Data
+Job_Code <- as.numeric(strsplit(current_url, "/")[[1]][5])
+Full_URL <- current_url
+Job_Title <- html %>% html_elements(".usajobs-joa-banner__title") %>% html_text2()
+Agency <- html %>% html_elements(".usajobs-joa-banner__dept") %>% html_text2()
+if (Agency != ""){
+  Listed_Agency <- Agency
+} else {
+  Listed_Agency <- html %>% html_elements(".usajobs-joa-banner__agency") %>% html_text2()
+}
+
+# Sidebar Data
+remote_data <- html %>% html_elements(".usajobs-joa-summary__grades") %>% html_text2()
+
+Pay_Scale_And_Grade <- remote_data[[1]]
+Remote_Job <- remote_data[[2]]
+Telework_Eligible <- remote_data[[3]]
+Travel_Required <- remote_data[[4]]
+Relocation_Expenses_Reimbursed <- remote_data[[5]]
+
+extra_details <- html %>% html_elements(".usajobs-joa-summary__value") %>% html_text2()
+
+Appointment_Type <- extra_details[[2]]
+Work_Schedule <- extra_details[[3]]
+Hiring_Process <- extra_details[[4]]
+Promotion_Potential <- extra_details[[5]]
+Supervisory_Status <- extra_details[[6]]
+Security_Clearance <- extra_details[[7]]
+Drug_Test <- extra_details[[8]]
+Salary_Min <- as.numeric(gsub("\\,", "", gsub("\\$", "", strsplit(html %>% html_elements(".usajobs-joa-summary__salary") %>% html_text2(), " ")[[1]][1])))
+Salary_Max <- as.numeric(gsub("\\,", "", gsub("\\$", "", strsplit(html %>% html_elements(".usajobs-joa-summary__salary") %>% html_text2(), " ")[[1]][3])))
+
+# Paragraph Data
+
+Sought_Qualifications <- html %>% html_nodes(xpath = '//*[@id="qualifications"]') %>% html_text2()
+
+# Date Accessed
+Todays_Date <- as.character(Sys.Date())
+
+# Write the data to the tibble
+
+Data_Analyst_Data_Set <- Data_Analyst_Data_Set %>% 
+  add_row("Job Code" = Job_Code, "Date Accessed" = Todays_Date, Keyword = "Data Analyst", "Full URL" = current_url, Title = Job_Title, Agency = Listed_Agency, "Pay scale & grade" = Pay_Scale_And_Grade, "Remote job" = Remote_Job, "Telework eligible" = Telework_Eligible, "Travel Required" = Travel_Required, "Relocation expenses reimbursed" = Relocation_Expenses_Reimbursed, "Appointment type" = Appointment_Type, "Work schedule" = Work_Schedule, "Hiring Process" = Hiring_Process, "Promotion Potential" = Promotion_Potential, "Supervisory Status" = Supervisory_Status, "Security Clearance" = Security_Clearance, "Drug Test" = Drug_Test, "salary_min" = Salary_Min, "salary_max" = Salary_Max, Qualifications = Sought_Qualifications)
+
+}
+
+write_csv(Data_Analyst_Data_Set, "Data_Analyst_Data_Set.csv")
+          
+```
+
+# Step 2: Clean
+
+### 2a) Combine data tables and remove duplicate jobs
+```{r clean up dups}
+df2 <- rbind(Data_Analyst_Data_Set, Data_Engineer_Data_Set)
+full_data_with_dups <- rbind(df2, Data_Scientist_Data_Set)
+
+# Remove duplicates, keeping information from the unique column
+df_cleaned <- full_data_with_dups %>%
+  group_by(`Job Code`, `Date Accessed`, `Full URL`, Title, Agency, `Pay scale & grade`, `Remote job`, `Telework eligible`, `Travel Required`, `Relocation expenses reimbursed`, `Appointment type`, `Work schedule`, `Hiring Process`, `Promotion Potential`, `Supervisory Status`, `Security Clearance`, `Drug Test`, `salary_min`, `salary_max`, Qualifications) %>%  # Group by all columns except the unique one
+  summarize(
+    Keyword = paste(unique(Keyword), collapse = ", "),  # Combine the unique_column values
+    .groups = "drop"  # Remove grouping structure
+  )
+
+write_csv(df_cleaned, "Full_Clean_Data_Jobs_Dataset.csv")
+```
+
+### 2b) Build stopwords out to clean "Qualifications" more
+```{r expand stopwords}
+
+# Edit the list of words to remove from Qualifications
+numbers <- c("one", "two", "three", "four", "five", "six", "seven", "eight", 
+             "nine", "ten")
+removal_words <- stopwords::stopwords("en")
+removal_words <- append(removal_words, "qualification")
+removal_words <- append(removal_words, "qualifications")
+removal_words <- append(removal_words, "")
+removal_words <- append(removal_words, letters)
+removal_words <- append(removal_words, numbers)
+
+```
+
+### 2c) Function to clean qualifications -> create lists of words
+```{r qualifications_function}
+
+shrink_qualifications <- function(sample_qualification){
+  sample_qualification <- str_replace_all(sample_qualification, "\n", " ")
+  sample_qualification <- strsplit(sample_qualification, " ")
+  sample_qualification <- lapply(sample_qualification, function(s) s[nchar(s) <= 25])
+  sample_qualification <- lapply(sample_qualification, function(s) gsub("[^[:alnum:]]", "", s))
+  sample_qualification <- lapply(sample_qualification, tolower)
+  sample_qualification <- sample_qualification[[1]]
+  sample_qualification <- base::setdiff(sample_qualification, removal_words)
+  #sample_qualification <- vapply(sample_qualification, function(x) if (!grepl("^\\d+$", x)) x else NULL, FUN.VALUE = character(1))
+  #sample_qualification <- sample_qualification[!is.null(sample_qualification)]
+  sample_qualification <- lapply(sample_qualification, function(x) if (!grepl("\\d", x)) x else NULL)
+sample_qualification <- base::Filter(base::Negate(is.null), sample_qualification)
+sample_qualification <- unlist(sample_qualification)
+sample_qualification <- list(sample_qualification)
+sample_qualification <- sapply(sample_qualification, function(x) paste(x, collapse = " "))
+sample_qualification <- as.character(sample_qualification)
+return(sample_qualification)
+}
+```
+
+### 2d) Clean Qualifications and Export to CSV and JSON
+```{r clean_qualifications_and export}
+
+Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
+#typeof(Full_Clean_Data_Jobs_Dataset)
+
+modding_table <- as_tibble(Full_Clean_Data_Jobs_Dataset)
+
+all_3 <- modding_table %>% 
+  filter(Keyword == "Data Analyst, Data Engineer, Data Scientist") %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications))
+
+all_data_for_json <- modding_table %>% 
+  mutate(Reduced_Qualifications = map(Qualifications, shrink_qualifications)) %>% 
+  select(-Qualifications)
+
+view(all_data_for_json)
+
+clear_qualifications <- modding_table %>% 
+  select(-Qualifications)
+
+write_json(all_3, "Only_Definite_Data_Science_Jobs_Dataset.json")
+write_json(all_data_for_json, "All_Data_Fixed_Qualifications.json")
+write_csv(all_3, "Only_Definite_Data_Science_Jobs_Dataset.csv")
+write_csv(clear_qualifications, "Data_Jobs_Dataset_Without_Qualifications.csv")
+
+```
+
+### 2e) Telework, Travel, Schedule, Remote, Relocation Columns Cleaned and Combined
+```{r clean columns}
+#Full_Clean_Data_Jobs_Dataset <- read_csv("~/Desktop/AU_Grad_Cert/Fall_2024/Data_Science/Final Project/Data_Science_Jobs/Full_Clean_Data_Jobs_Dataset.csv")
+
+cleaned_five <- Full_Clean_Data_Jobs_Dataset %>%
+  mutate(`Telework eligible` = case_when(
+    str_sub(`Telework eligible`, 1, 3) == "Yes" ~ "Yes",
+    `Telework eligible` == "No" ~ "No",
+    `Telework eligible` == "Not applicable, this is a remote position." ~ "N/A (Remote Position)",
+    TRUE ~ "Unspecified"
+  )) %>% 
+  # Removes 80 cases of the 2500 where the data scraped incorrectly
+  filter(`Telework eligible` != "Unspecified") %>% 
+  mutate(`Travel Required` = case_when(
+    str_starts(`Travel Required`, "25% or less") | 
+      str_starts(`Travel Required`, "Occasional travel") ~ "<= 25%",
+    str_sub(`Travel Required`, 1, 11) == "50% or less" ~ "<= 50%",
+    str_sub(`Travel Required`, 1, 11) == "75% or less" |
+      str_sub(`Travel Required`, 1, 14) == "76% or greater" ~ "> 50%",
+    `Travel Required` == "Not required" ~ "Not Required",
+    TRUE ~ "Unspecified")) %>% 
+  filter(`Travel Required` != "Unspecified") %>% 
+   mutate(`Work schedule` = case_when(
+    str_starts(`Work schedule`, "Full-Time") |
+      str_starts(`Work schedule`, "Full-time") ~ "Full-time",
+    str_starts(`Work schedule`, "Multiple Schedules") ~ "Multiple Schedules (Schedules may vary depending on agency, position, season, etc.)",
+    str_starts(`Work schedule`, "Part-time") ~ "Part-time",
+    `Work schedule` == "Intermittent" ~ "Intermittent",
+    TRUE ~ "Unspecified")) %>% 
+  mutate(`Remote job` = case_when(
+    str_sub(`Remote job`, 1, 3) == "Yes" ~ "Yes",
+    `Remote job` == "No" ~ "No",
+    TRUE ~ "Unspecified"
+  )) %>% 
+  mutate(`Relocation expenses reimbursed` = case_when(
+    str_sub(`Relocation expenses reimbursed`, 1, 3) == "Yes" ~ "Yes",
+    `Relocation expenses reimbursed` == "No" ~ "No",
+    TRUE ~ "Unspecified"
+  ))
+
+#write_json(cleaned_five, "12-12_Cleaned_Data.json")
+#write_csv(cleaned_five, "12-12_Cleaned_Data.csv")
+```
+
+### 2f) Jobs with hourly wages are converted to salaries (based on 40hrs/52wks) 
+```{r fix_hourly}
+cleaned_five %>% 
+  filter(salary_min < 54) %>% 
+  select(salary_min, salary_max)
+  
+cleaned_seven <- cleaned_five %>% 
+  mutate(salary_min = case_when(
+    salary_min < 54 & salary_min > 2 ~ salary_min*40*52,
+    TRUE ~ salary_min
+    )) %>% 
+  mutate(salary_max = case_when(
+    salary_max < 54 ~ salary_max*40*52,
+    TRUE ~ salary_max
+    ))
+
+```
+
+# Step 3: Analysis
+
+### 3a) Logistic Regression of Supervisors and Salary
+```{r logistic_regression}
+
+supervisor_data <- cleaned_seven %>% 
+  select(`Supervisory Status`, salary_min, salary_max) %>% 
+  mutate(supervisor_binary = case_when(
+    `Supervisory Status` == "No" ~ 0,
+    `Supervisory Status` == "Yes" ~ 1
+  ))
+
+glm(supervisor_binary ~ salary_min + salary_max, family = "binomial", data = supervisor_data) -> supervisor_model
+summary(supervisor_model)
+#plot(supervisor_model)
+ggplot(supervisor_data, aes(x=salary_max, y=supervisor_binary)) + 
+        geom_point(alpha=.5) +
+        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+ggplot(supervisor_data, aes(x=salary_min, y=supervisor_binary)) + 
+        geom_point(alpha=.5) +
+        stat_smooth(method="glm", se=FALSE, method.args = list(family=binomial))
+```
+
+# 4: Extra
+
+### 4a) Glossary of Terms from USAJOBs
+``` {r glossary}
+#Glossary:
+# pay scale and grade: A grade refers to the pay scale which sets the pay level and qualifications for the job.
+
+# Telework elligible: Determines if you will be able to work from home on some days.
+# travel required: The amount of travel the job requires.
+
+# relocation expenses reimbursed: Whether or not you will be reimbursed for relocation expenses.
+
+# appointment type: The way that the Federal Government classifies the duration of certain jobs.
+
+# work schedule: Determines the number of hours that you will work during the week.
+
+#hiring process: The Federal Government has three services that determine how you are hired: Competitive, Excepted, and Senior Executive. 
+
+#"Promotion Potential": Determines if you can move up to the next grade within your pay scale.
+
+# supervisory status: Determines if you will be a supervisor.
+
+# security clearance: The level of security clearance required to hold this position.
+
+# Drug Test: Whether or not you will be tested for illegal drug use.
+
+
+```
+
